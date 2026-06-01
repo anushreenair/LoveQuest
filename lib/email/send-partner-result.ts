@@ -12,6 +12,7 @@ export interface PartnerEmailPayload {
   personalityLabel: string;
   personalityEmoji: string;
   characterComment: string;
+  shareUrl?: string;
 }
 
 export async function sendPartnerResultEmail(
@@ -39,6 +40,7 @@ export async function sendPartnerResultEmail(
         personalityLabel: payload.personalityLabel,
         personalityEmoji: payload.personalityEmoji,
         characterComment: payload.characterComment,
+        shareUrl: payload.shareUrl,
       }),
       text: buildLQResultEmailText({
         userName: payload.userName,
@@ -47,6 +49,7 @@ export async function sendPartnerResultEmail(
         personalityLabel: payload.personalityLabel,
         personalityEmoji: payload.personalityEmoji,
         characterComment: payload.characterComment,
+        shareUrl: payload.shareUrl,
       }),
     });
 
@@ -54,12 +57,19 @@ export async function sendPartnerResultEmail(
       console.error("Resend error:", error);
       const msg = error.message ?? "Email could not be sent.";
 
-      if (msg.includes("only send testing emails to your own")) {
-        return {
-          sent: false,
-          error:
-            "Resend test mode: use your Resend account email as partner email, or verify a domain at resend.com/domains.",
-        };
+      if (
+        msg.includes("only send testing emails") ||
+        msg.includes("only send emails to your own")
+      ) {
+        const allowedMatch = msg.match(
+          /your own email address \(([^)]+)\)/i,
+        );
+        const allowed = allowedMatch?.[1];
+        const hint = allowed
+          ? `Right now Resend only allows sending to ${allowed}. Use the share link below for ${payload.partnerEmail}, or verify a domain at resend.com/domains.`
+          : "Resend test mode blocks email to this address. Use the share link below, or verify a domain at resend.com/domains.";
+
+        return { sent: false, error: hint };
       }
 
       return { sent: false, error: msg };

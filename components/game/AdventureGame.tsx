@@ -40,6 +40,7 @@ export function AdventureGame({
     emailSent: boolean;
     emailError?: string;
     partnerEmail: string;
+    shareUrl: string;
   } | null>(null);
 
   const question = LQ_QUESTIONS[questionIndex];
@@ -107,6 +108,7 @@ export function AdventureGame({
         emailSent: result.emailSent,
         emailError: result.emailError,
         partnerEmail: result.partnerEmail,
+        shareUrl: result.shareUrl,
       });
       setPhase("results");
     });
@@ -129,6 +131,7 @@ export function AdventureGame({
         emailError={results.emailError}
         partnerName={partnerName}
         partnerEmail={results.partnerEmail}
+        shareUrl={results.shareUrl}
         onEmailResent={(sent, err) => {
           setResults((r) =>
             r ? { ...r, emailSent: sent, emailError: err } : r,

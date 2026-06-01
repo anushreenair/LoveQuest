@@ -5,6 +5,7 @@ interface LQEmailParams {
   personalityLabel: string;
   personalityEmoji: string;
   characterComment: string;
+  shareUrl?: string;
 }
 
 export function buildLQResultEmailHtml(params: LQEmailParams): string {
@@ -51,6 +52,14 @@ export function buildLQResultEmailHtml(params: LQEmailParams): string {
                 <p style="margin:0 0 8px;color:#f9a8d4;font-size:12px;text-transform:uppercase;">Lumi&apos;s comment</p>
                 <p style="margin:0;color:#fce7f3;font-size:15px;font-style:italic;">&ldquo;${escapeHtml(characterComment)}&rdquo;</p>
               </div>
+              ${
+                params.shareUrl
+                  ? `<p style="text-align:center;margin-top:24px;">
+                <a href="${escapeHtml(params.shareUrl)}" style="display:inline-block;background:linear-gradient(135deg,#ec4899,#a855f7);color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-size:15px;font-weight:600;">View your results</a>
+              </p>
+              <p style="color:#fbcfe8;font-size:12px;text-align:center;margin-top:12px;word-break:break-all;">${escapeHtml(params.shareUrl)}</p>`
+                  : ""
+              }
               <p style="color:#fbcfe8;font-size:14px;text-align:center;margin-top:28px;">
                 Maybe send them a sweet message today ❤️
               </p>
@@ -91,6 +100,7 @@ Relationship Type: ${params.personalityLabel} ${params.personalityEmoji}
 Lumi says: "${params.characterComment}"
 
 Maybe send them a sweet message today ❤️
+${params.shareUrl ? `\n\nView results: ${params.shareUrl}` : ""}
 
 — LoveQuest`;
 }

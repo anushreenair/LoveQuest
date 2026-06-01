@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
+import { getLatestShareUrl } from "@/app/game/actions";
 import { getProfile } from "@/app/onboarding/actions";
 import { AdventureGame } from "@/components/game/AdventureGame";
+import { PartnerShareBanner } from "@/components/game/PartnerShareBanner";
 import { redirect } from "next/navigation";
 
 export const metadata = {
@@ -21,6 +23,8 @@ export default async function GamePage() {
     redirect("/onboarding");
   }
 
+  const shareUrl = await getLatestShareUrl();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1a0a2e] via-[#2d1b4e] to-[#0f0618]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(236,72,153,0.15),transparent_55%)]" />
@@ -31,6 +35,13 @@ export default async function GamePage() {
             LoveQuest Adventure
           </p>
         </header>
+
+        {shareUrl && (
+          <PartnerShareBanner
+            shareUrl={shareUrl}
+            partnerName={profile.partner_name}
+          />
+        )}
 
         <AdventureGame
           partnerName={profile.partner_name}

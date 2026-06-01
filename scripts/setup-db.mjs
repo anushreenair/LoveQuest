@@ -52,6 +52,8 @@ const statements = [
     created_at timestamptz not null default now()
   )`,
   `create index if not exists lq_results_auth_user_id_idx on lq_results (auth_user_id)`,
+  `alter table lq_results add column if not exists share_token text unique`,
+  `create unique index if not exists lq_results_share_token_idx on lq_results (share_token)`,
 ];
 
 console.log(`Running ${statements.length} SQL statements…`);

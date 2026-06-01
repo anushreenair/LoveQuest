@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:setup": "node --env-file=.env.local scripts/setup-db.mjs",
+    "db:backfill-share": "node --env-file=.env.local scripts/backfill-share-tokens.mjs",
     "resend:setup": "node scripts/setup-resend.mjs"
   },
   "dependencies": {

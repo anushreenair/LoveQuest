@@ -41,7 +41,9 @@ create table if not exists lq_results (
   cat_verdict text not null,
   answer_scores jsonb not null,
   email_sent boolean not null default false,
+  share_token text unique,
   created_at timestamptz not null default now()
 );
 
 create index if not exists lq_results_auth_user_id_idx on lq_results (auth_user_id);
+create unique index if not exists lq_results_share_token_idx on lq_results (share_token);

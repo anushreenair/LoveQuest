@@ -1,14 +1,19 @@
 "use server";
 
 import { auth } from "@/auth";
+import {
+  ensureLatestShareToken,
+  saveLQResult,
+  updateLQResultEmailSent,
+} from "@/lib/db/lq-results";
 import { getProfileByAuthUserId } from "@/lib/db/profiles";
-import { saveLQResult } from "@/lib/db/lq-results";
 import { sendPartnerResultEmail } from "@/lib/email/send-partner-result";
 import { buildResultSummary } from "@/lib/lq/scoring";
 import {
   calculateCompatibilityScore,
   validateAnswers,
 } from "@/lib/lq/scoring";
+import { buildShareUrl } from "@/lib/share-url";
 
 export type SubmitLQResult =
   | {
@@ -22,6 +27,7 @@ export type SubmitLQResult =
       emailSent: boolean;
       emailError?: string;
       partnerEmail: string;
+      shareUrl: string;
     }
   | { success: false; error: string };
 
@@ -56,6 +62,28 @@ export async function submitLoveQuotient(
   const score = calculateCompatibilityScore(answerScores);
   const { personality, characterComment } = buildResultSummary(score);
 
+  let saved;
+  try {
+    saved = await saveLQResult({
+      authUserId: session.user.id,
+      score,
+      tierId: personality.id,
+      tierLabel: personality.label,
+      catId: "lumi",
+      catVerdict: characterComment,
+      answerScores,
+      emailSent: false,
+    });
+  } catch (err) {
+    console.error("saveLQResult:", err);
+    return {
+      success: false,
+      error: "Could not save your results. Check your database connection.",
+    };
+  }
+
+  const shareUrl = buildShareUrl(saved.share_token!);
+
   const emailResult = await sendPartnerResultEmail({
     userName: profile.name,
     partnerName: profile.partner_name,
@@ -64,25 +92,13 @@ export async function submitLoveQuotient(
     personalityLabel: personality.label,
     personalityEmoji: personality.emoji,
     characterComment,
+    shareUrl,
   });
 
   try {
-    await saveLQResult({
-      authUserId: session.user.id,
-      score,
-      tierId: personality.id,
-      tierLabel: personality.label,
-      catId: "lumi",
-      catVerdict: characterComment,
-      answerScores,
-      emailSent: emailResult.sent,
-    });
+    await updateLQResultEmailSent(saved.id, emailResult.sent);
   } catch (err) {
-    console.error("saveLQResult:", err);
-    return {
-      success: false,
-      error: "Could not save your results. Check your database connection.",
-    };
+    console.error("updateLQResultEmailSent:", err);
   }
 
   return {
@@ -96,6 +112,7 @@ export async function submitLoveQuotient(
     emailSent: emailResult.sent,
     emailError: emailResult.error,
     partnerEmail: profile.partner_email,
+    shareUrl,
   };
 }
 
@@ -107,7 +124,7 @@ export async function resendPartnerEmail(
   personalityLabel: string,
   personalityEmoji: string,
   characterComment: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; shareUrl?: string }> {
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "You must be signed in." };
@@ -118,6 +135,9 @@ export async function resendPartnerEmail(
     return { success: false, error: "Partner email not found." };
   }
 
+  const shareToken = await ensureLatestShareToken(session.user.id);
+  const shareUrl = shareToken ? buildShareUrl(shareToken) : undefined;
+
   const result = await sendPartnerResultEmail({
     userName: profile.name,
     partnerName: profile.partner_name,
@@ -126,9 +146,19 @@ export async function resendPartnerEmail(
     personalityLabel,
     personalityEmoji,
     characterComment,
+    shareUrl,
   });
 
   return result.sent
-    ? { success: true }
-    : { success: false, error: result.error };
+    ? { success: true, shareUrl }
+    : { success: false, error: result.error, shareUrl };
+}
+
+/** Share link for the most recent quiz (for partners when email is blocked). */
+export async function getLatestShareUrl(): Promise<string | null> {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  const token = await ensureLatestShareToken(session.user.id);
+  return token ? buildShareUrl(token) : null;
 }
