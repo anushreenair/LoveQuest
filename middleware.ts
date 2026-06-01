@@ -5,5 +5,5 @@ export { auth as middleware } from "@/auth";
  * Public pages (landing, API auth) are skipped for performance.
  */
 export const config = {
-  matcher: ["/onboarding/:path*"],
+  matcher: ["/onboarding/:path*", "/game/:path*"],
 };

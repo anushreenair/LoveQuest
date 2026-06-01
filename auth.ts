@@ -46,9 +46,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      */
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnOnboarding = nextUrl.pathname.startsWith("/onboarding");
+      const isProtected =
+        nextUrl.pathname.startsWith("/onboarding") ||
+        nextUrl.pathname.startsWith("/game");
 
-      if (isOnOnboarding) {
+      if (isProtected) {
         return isLoggedIn;
       }
 
@@ -71,7 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     /**
-     * Persist user id in the JWT for server-side lookups later (Supabase sync).
+     * Persist user id in the JWT for server-side lookups later (Neon sync).
      */
     jwt({ token, user }) {
       if (user?.id) {
