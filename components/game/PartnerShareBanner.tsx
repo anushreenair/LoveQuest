@@ -29,7 +29,7 @@ export function PartnerShareBanner({
         Send results to {partnerName}
       </p>
       <p className="mt-1 text-xs text-pink-200/70">
-        Email may be blocked in test mode — copy this link and text it to them.
+        Or copy this link and text it to them (WhatsApp, iMessage, etc.).
       </p>
       <button
         type="button"

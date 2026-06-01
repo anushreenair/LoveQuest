@@ -7,7 +7,7 @@ import {
   updateLQResultEmailSent,
 } from "@/lib/db/lq-results";
 import { getProfileByAuthUserId } from "@/lib/db/profiles";
-import { sendPartnerResultEmail } from "@/lib/email/send-partner-result";
+import { sendQuizResultEmails } from "@/lib/email/send-results-emails";
 import { buildResultSummary } from "@/lib/lq/scoring";
 import {
   calculateCompatibilityScore,
@@ -25,6 +25,7 @@ export type SubmitLQResult =
       personalityGradient: string;
       characterComment: string;
       emailSent: boolean;
+      userEmailSent: boolean;
       emailError?: string;
       partnerEmail: string;
       shareUrl: string;
@@ -32,7 +33,7 @@ export type SubmitLQResult =
   | { success: false; error: string };
 
 /**
- * Calculate compatibility, save to Neon, email partner via Resend.
+ * Calculate compatibility, save to Neon, email partner + user via Gmail SMTP.
  */
 export async function submitLoveQuotient(
   answerScores: number[],
@@ -84,8 +85,9 @@ export async function submitLoveQuotient(
 
   const shareUrl = buildShareUrl(saved.share_token!);
 
-  const emailResult = await sendPartnerResultEmail({
+  const emailResult = await sendQuizResultEmails({
     userName: profile.name,
+    userEmail: profile.email,
     partnerName: profile.partner_name,
     partnerEmail: profile.partner_email,
     score,
@@ -110,6 +112,7 @@ export async function submitLoveQuotient(
     personalityGradient: personality.gradient,
     characterComment,
     emailSent: emailResult.sent,
+    userEmailSent: emailResult.userSent,
     emailError: emailResult.error,
     partnerEmail: profile.partner_email,
     shareUrl,
@@ -117,14 +120,19 @@ export async function submitLoveQuotient(
 }
 
 /**
- * Resend compatibility results to partner (e.g. if first send failed).
+ * Resend compatibility results (partner + your copy).
  */
 export async function resendPartnerEmail(
   score: number,
   personalityLabel: string,
   personalityEmoji: string,
   characterComment: string,
-): Promise<{ success: boolean; error?: string; shareUrl?: string }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  shareUrl?: string;
+  userEmailSent?: boolean;
+}> {
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "You must be signed in." };
@@ -138,8 +146,9 @@ export async function resendPartnerEmail(
   const shareToken = await ensureLatestShareToken(session.user.id);
   const shareUrl = shareToken ? buildShareUrl(shareToken) : undefined;
 
-  const result = await sendPartnerResultEmail({
+  const result = await sendQuizResultEmails({
     userName: profile.name,
+    userEmail: profile.email,
     partnerName: profile.partner_name,
     partnerEmail: profile.partner_email,
     score,
@@ -150,11 +159,11 @@ export async function resendPartnerEmail(
   });
 
   return result.sent
-    ? { success: true, shareUrl }
+    ? { success: true, shareUrl, userEmailSent: result.userSent }
     : { success: false, error: result.error, shareUrl };
 }
 
-/** Share link for the most recent quiz (for partners when email is blocked). */
+/** Share link for the most recent quiz. */
 export async function getLatestShareUrl(): Promise<string | null> {
   const session = await auth();
   if (!session?.user?.id) return null;

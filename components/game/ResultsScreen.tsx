@@ -15,6 +15,7 @@ interface ResultsScreenProps {
   personalityGradient: string;
   characterComment: string;
   emailSent: boolean;
+  userEmailSent?: boolean;
   emailError?: string;
   partnerName?: string;
   partnerEmail?: string;
@@ -30,6 +31,7 @@ export function ResultsScreen({
   personalityGradient,
   characterComment,
   emailSent: initialEmailSent,
+  userEmailSent: initialUserEmailSent = false,
   emailError: initialEmailError,
   partnerName,
   partnerEmail,
@@ -38,6 +40,7 @@ export function ResultsScreen({
 }: ResultsScreenProps) {
   const [displayScore, setDisplayScore] = useState(0);
   const [emailSent, setEmailSent] = useState(initialEmailSent);
+  const [userEmailSent, setUserEmailSent] = useState(initialUserEmailSent);
   const [emailError, setEmailError] = useState(initialEmailError);
   const [shareUrl, setShareUrl] = useState(initialShareUrl);
   const [copied, setCopied] = useState(false);
@@ -81,6 +84,7 @@ export function ResultsScreen({
 
       if (result.success) {
         setEmailSent(true);
+        setUserEmailSent(result.userEmailSent ?? false);
         setEmailError(undefined);
         onEmailResent?.(true);
       } else {
@@ -164,9 +168,16 @@ export function ResultsScreen({
           )}
 
           {emailSent ? (
-            <p className="mt-3 text-center text-sm text-emerald-300/90">
-              💌 Results emailed to {partnerName ?? "your partner"}!
-            </p>
+            <div className="mt-3 space-y-1 text-center text-sm text-emerald-300/90">
+              <p>
+                💌 Results emailed to {partnerName ?? "your partner"}!
+              </p>
+              {userEmailSent && (
+                <p className="text-emerald-300/70">
+                  A copy was sent to your inbox too.
+                </p>
+              )}
+            </div>
           ) : (
             <p className="mt-3 text-center text-sm text-amber-200/90">
               {emailError ??

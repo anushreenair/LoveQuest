@@ -38,6 +38,7 @@ export function AdventureGame({
     personalityGradient: string;
     characterComment: string;
     emailSent: boolean;
+    userEmailSent: boolean;
     emailError?: string;
     partnerEmail: string;
     shareUrl: string;
@@ -106,6 +107,7 @@ export function AdventureGame({
         personalityGradient: result.personalityGradient,
         characterComment: result.characterComment,
         emailSent: result.emailSent,
+        userEmailSent: result.userEmailSent,
         emailError: result.emailError,
         partnerEmail: result.partnerEmail,
         shareUrl: result.shareUrl,
@@ -128,6 +130,7 @@ export function AdventureGame({
         personalityGradient={results.personalityGradient}
         characterComment={results.characterComment}
         emailSent={results.emailSent}
+        userEmailSent={results.userEmailSent}
         emailError={results.emailError}
         partnerName={partnerName}
         partnerEmail={results.partnerEmail}
