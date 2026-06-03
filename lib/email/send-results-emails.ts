@@ -3,10 +3,9 @@ import {
   buildLQResultEmailText,
 } from "@/lib/email/lq-result-template";
 import {
-  hasGoogleMailTokens,
-  sendViaGmailOAuth,
-  type GoogleMailTokens,
-} from "@/lib/email/gmail-oauth";
+  hasEnvGmailSend,
+  sendViaEnvGmail,
+} from "@/lib/email/gmail-env";
 import { isResendConfigured, sendViaResendFallback } from "@/lib/email/resend-fallback";
 import { isSmtpConfigured, sendMail } from "@/lib/email/smtp";
 import {
@@ -33,16 +32,14 @@ export interface QuizEmailResult {
   error?: string;
 }
 
-async function sendPartnerMessage(
-  payload: QuizEmailPayload,
-  googleTokens: GoogleMailTokens | undefined,
-  delivery: (opts: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }) => Promise<void>,
-): Promise<void> {
+type MailDelivery = (opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}) => Promise<void>;
+
+function partnerContent(payload: QuizEmailPayload) {
   const html = buildLQResultEmailHtml({
     userName: payload.userName,
     partnerName: payload.partnerName,
@@ -63,22 +60,24 @@ async function sendPartnerMessage(
     shareUrl: payload.shareUrl,
   });
 
-  await delivery({
-    to: payload.partnerEmail,
+  return {
     subject: `${payload.userName} completed LoveQuest for you ❤️`,
     html,
     text,
-  });
+  };
+}
+
+async function sendPartnerMessage(
+  payload: QuizEmailPayload,
+  delivery: MailDelivery,
+): Promise<void> {
+  const { subject, html, text } = partnerContent(payload);
+  await delivery({ to: payload.partnerEmail, subject, html, text });
 }
 
 async function sendUserMessage(
   payload: QuizEmailPayload,
-  delivery: (opts: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }) => Promise<void>,
+  delivery: MailDelivery,
 ): Promise<void> {
   await delivery({
     to: payload.userEmail,
@@ -106,81 +105,83 @@ async function sendUserMessage(
   });
 }
 
-/**
- * Sends results to partner + player.
- * Priority: Gmail (Google sign-in) → SMTP app password → Resend fallback.
- */
-export async function sendQuizResultEmails(
+/** When partner send fails, email user the partner version to forward manually. */
+async function sendPartnerForwardToUser(
   payload: QuizEmailPayload,
-  googleTokens?: GoogleMailTokens,
-): Promise<QuizEmailResult> {
-  const partnerPayload = payload;
+  delivery: MailDelivery,
+): Promise<void> {
+  const { html, text } = partnerContent(payload);
+  await delivery({
+    to: payload.userEmail,
+    subject: `Forward to ${payload.partnerName}: LoveQuest results ❤️`,
+    html: `<p>We couldn't auto-send to <strong>${payload.partnerEmail}</strong>. Forward this email to them:</p>${html}`,
+    text: `Forward to ${payload.partnerName} (${payload.partnerEmail}):\n\n${text}`,
+  });
+}
 
-  if (hasGoogleMailTokens(googleTokens)) {
+async function tryDelivery(
+  payload: QuizEmailPayload,
+  delivery: MailDelivery,
+): Promise<QuizEmailResult> {
+  let partnerSent = false;
+  let userSent = false;
+  let lastError: string | undefined;
+
+  try {
+    await sendPartnerMessage(payload, delivery);
+    partnerSent = true;
+  } catch (err) {
+    console.error("Partner email failed:", err);
+    lastError =
+      err instanceof Error ? err.message : "Could not email your partner.";
+  }
+
+  if (payload.userEmail) {
     try {
-      await sendPartnerMessage(partnerPayload, googleTokens, (opts) =>
-        sendViaGmailOAuth(googleTokens!, opts),
-      );
-      let userSent = false;
-      if (payload.userEmail) {
-        try {
-          await sendUserMessage(payload, (opts) =>
-            sendViaGmailOAuth(googleTokens!, opts),
-          );
-          userSent = true;
-        } catch (err) {
-          console.error("User Gmail send failed:", err);
-        }
-      }
-      return { sent: true, partnerSent: true, userSent };
+      await sendUserMessage(payload, delivery);
+      userSent = true;
     } catch (err) {
-      console.error("Gmail OAuth send failed:", err);
+      console.error("User email failed:", err);
     }
   }
 
-  if (isSmtpConfigured()) {
-    let partnerSent = false;
-    let userSent = false;
-    let lastError: string | undefined;
-
+  if (!partnerSent && payload.userEmail) {
     try {
-      await sendPartnerMessage(partnerPayload, googleTokens, sendMail);
-      partnerSent = true;
+      await sendPartnerForwardToUser(payload, delivery);
     } catch (err) {
-      console.error("Partner SMTP failed:", err);
-      lastError =
-        err instanceof Error ? err.message : "Could not email your partner.";
+      console.error("Forward-to-user email failed:", err);
     }
+  }
 
-    if (payload.userEmail) {
-      try {
-        await sendUserMessage(payload, sendMail);
-        userSent = true;
-      } catch (err) {
-        console.error("User SMTP failed:", err);
-      }
-    }
+  if (partnerSent) {
+    return { sent: true, partnerSent: true, userSent };
+  }
 
-    if (partnerSent) {
-      return { sent: true, partnerSent, userSent };
-    }
+  return {
+    sent: false,
+    partnerSent: false,
+    userSent,
+    error:
+      lastError ??
+      `Could not email ${payload.partnerEmail}. Use the share link below.`,
+  };
+}
 
-    if (isResendConfigured()) {
-      const resend = await sendViaResendFallback(payload);
-      return {
-        sent: resend.partnerSent,
-        partnerSent: resend.partnerSent,
-        userSent: resend.userSent || userSent,
-        error: resend.error ?? lastError,
-      };
-    }
+/**
+ * Sends results to partner + player.
+ * Priority: Gmail env token → SMTP → Resend (limited in test mode).
+ */
+export async function sendQuizResultEmails(
+  payload: QuizEmailPayload,
+): Promise<QuizEmailResult> {
+  if (hasEnvGmailSend()) {
+    const result = await tryDelivery(payload, sendViaEnvGmail);
+    if (result.partnerSent) return result;
+  }
 
-    return {
-      sent: false,
-      partnerSent: false,
-      userSent,
-      error: lastError,
-    };
+  if (isSmtpConfigured()) {
+    const result = await tryDelivery(payload, sendMail);
+    if (result.partnerSent) return result;
   }
 
   if (isResendConfigured()) {
@@ -197,8 +198,7 @@ export async function sendQuizResultEmails(
     sent: false,
     partnerSent: false,
     userSent: false,
-    error: hasGoogleMailTokens(googleTokens)
-      ? "Gmail send failed. Enable Gmail API in Google Cloud, then sign out and sign in again."
-      : "Sign out and sign in again (allow Gmail), or run npm run email:setup for Gmail SMTP.",
+    error:
+      "Email not configured. Run: npm run gmail:send-setup (then add token to Vercel).",
   };
 }

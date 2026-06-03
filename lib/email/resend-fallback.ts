@@ -42,7 +42,10 @@ export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
-/** Resend test mode only delivers to the account owner email. */
+/**
+ * Resend test mode only delivers to the Resend account owner email.
+ * Partner emails need Gmail setup: npm run gmail:send-setup
+ */
 export async function sendViaResendFallback(
   payload: QuizEmailPayload,
 ): Promise<{
@@ -70,16 +73,12 @@ export async function sendViaResendFallback(
     shareUrl: payload.shareUrl,
   });
 
-  let partnerSent = false;
-  let userSent = false;
-
   const partnerResult = await resendSend(
     payload.partnerEmail,
     `${payload.userName} completed LoveQuest for you ❤️`,
     partnerHtml,
     partnerText,
   );
-  partnerSent = partnerResult.ok;
 
   const userResult = await resendSend(
     payload.userEmail,
@@ -105,17 +104,24 @@ export async function sendViaResendFallback(
       shareUrl: payload.shareUrl,
     }),
   );
-  userSent = userResult.ok;
+
+  const partnerSent = partnerResult.ok;
+  const userSent = userResult.ok;
+
+  if (!partnerSent && userSent && payload.userEmail) {
+    await resendSend(
+      payload.userEmail,
+      `Forward to ${payload.partnerName}: LoveQuest results ❤️`,
+      `<p>Resend can't auto-email ${payload.partnerEmail}. Forward this to your partner:</p>${partnerHtml}`,
+      `Forward to ${payload.partnerName}:\n\n${partnerText}`,
+    );
+  }
 
   return {
     partnerSent,
     userSent,
-    error:
-      !partnerSent && !userSent
-        ? (partnerResult.error ??
-          "Email blocked. Sign out, sign in again (Gmail), or use the share link.")
-        : !partnerSent
-          ? `Could not email ${payload.partnerEmail}. Share the link below — or sign out and sign in again to send from Gmail.`
-          : undefined,
+    error: partnerSent
+      ? undefined
+      : `Resend can't email ${payload.partnerEmail} (test mode). Run npm run gmail:send-setup — or forward the email we sent you.`,
   };
 }

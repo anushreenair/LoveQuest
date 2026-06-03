@@ -1,8 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
-const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
-
 /**
  * Central NextAuth.js configuration.
  * Exports helpers used across server components, API routes, and middleware.
@@ -14,13 +12,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      authorization: {
-        params: {
-          scope: `openid email profile ${GMAIL_SEND_SCOPE}`,
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
     }),
   ],
 
@@ -75,15 +66,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return `${baseUrl}/onboarding`;
     },
 
-    jwt({ token, account, user }) {
-      if (account) {
-        token.access_token = account.access_token;
-        if (account.refresh_token) {
-          token.refresh_token = account.refresh_token;
-        }
-        token.expires_at = account.expires_at;
-      }
-
+    jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;
       }
@@ -95,15 +78,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && token.sub) {
         session.user.id = token.sub;
       }
-
-      session.googleAccessToken =
-        typeof token.access_token === "string" ? token.access_token : undefined;
-      session.googleRefreshToken =
-        typeof token.refresh_token === "string"
-          ? token.refresh_token
-          : undefined;
-      session.googleExpiresAt =
-        typeof token.expires_at === "number" ? token.expires_at : undefined;
 
       return session;
     },

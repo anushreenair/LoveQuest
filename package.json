@@ -10,6 +10,8 @@
     "db:setup": "node --env-file=.env.local scripts/setup-db.mjs",
     "db:backfill-share": "node --env-file=.env.local scripts/backfill-share-tokens.mjs",
     "email:setup": "node --env-file=.env.local scripts/setup-email.mjs",
+    "gmail:send-setup": "node --env-file=.env.local scripts/gmail-send-setup.mjs",
+    "email:test": "node --env-file=.env.local scripts/test-partner-email.mjs",
     "gmail:enable": "node scripts/enable-gmail-api.mjs",
     "google:fix-oauth": "node scripts/patch-google-redirects.mjs"
   },
