@@ -84,8 +84,9 @@ if (fs.existsSync(envPath)) {
 
 lines.push(
   "",
-  "# Gmail SMTP — free, sends to any email (no domain)",
+  "# Gmail SMTP — sends to partner + you (no domain needed)",
   `SMTP_USER=${gmail}`,
+  `GMAIL_SENDER=${gmail}`,
   "SMTP_HOST=smtp.gmail.com",
   "SMTP_PORT=587",
   "SMTP_SECURE=false",
@@ -95,6 +96,17 @@ lines.push(
 
 fs.writeFileSync(envPath, lines.join("\n").trim() + "\n");
 console.log("✅ Saved SMTP settings to .env.local");
+
+console.log("\nSending test email to your Gmail…");
+await transport.sendMail({
+  from: `LoveQuest <${gmail}>`,
+  to: gmail,
+  subject: "LoveQuest email setup works ✅",
+  text: "Partner emails will now send automatically after the quiz.",
+  html: "<p>Partner emails will now send automatically after the quiz.</p>",
+});
+console.log("✅ Test email sent");
+
 console.log(
-  "\nCopy these same variables into Hostinger → Environment variables.",
+  "\nAdd the same SMTP_* and GMAIL_SENDER vars to Vercel → Settings → Environment Variables, then redeploy.",
 );

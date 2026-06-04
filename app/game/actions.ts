@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { getGoogleMailTokensFromSession } from "@/lib/auth/google-mail-tokens";
 import {
   ensureLatestShareToken,
   saveLQResult,
@@ -85,17 +86,20 @@ export async function submitLoveQuotient(
 
   const shareUrl = buildShareUrl(saved.share_token!);
 
-  const emailResult = await sendQuizResultEmails({
-    userName: profile.name,
-    userEmail: profile.email,
-    partnerName: profile.partner_name,
-    partnerEmail: profile.partner_email,
-    score,
-    personalityLabel: personality.label,
-    personalityEmoji: personality.emoji,
-    characterComment,
-    shareUrl,
-  });
+  const emailResult = await sendQuizResultEmails(
+    {
+      userName: profile.name,
+      userEmail: profile.email,
+      partnerName: profile.partner_name,
+      partnerEmail: profile.partner_email,
+      score,
+      personalityLabel: personality.label,
+      personalityEmoji: personality.emoji,
+      characterComment,
+      shareUrl,
+    },
+    getGoogleMailTokensFromSession(session),
+  );
 
   try {
     await updateLQResultEmailSent(saved.id, emailResult.sent);
@@ -146,17 +150,20 @@ export async function resendPartnerEmail(
   const shareToken = await ensureLatestShareToken(session.user.id);
   const shareUrl = shareToken ? buildShareUrl(shareToken) : undefined;
 
-  const result = await sendQuizResultEmails({
-    userName: profile.name,
-    userEmail: profile.email,
-    partnerName: profile.partner_name,
-    partnerEmail: profile.partner_email,
-    score,
-    personalityLabel,
-    personalityEmoji,
-    characterComment,
-    shareUrl,
-  });
+  const result = await sendQuizResultEmails(
+    {
+      userName: profile.name,
+      userEmail: profile.email,
+      partnerName: profile.partner_name,
+      partnerEmail: profile.partner_email,
+      score,
+      personalityLabel,
+      personalityEmoji,
+      characterComment,
+      shareUrl,
+    },
+    getGoogleMailTokensFromSession(session),
+  );
 
   return result.sent
     ? { success: true, shareUrl, userEmailSent: result.userSent }

@@ -2,10 +2,16 @@ import {
   buildLQResultEmailHtml,
   buildLQResultEmailText,
 } from "@/lib/email/lq-result-template";
+import { sendViaBrevo, isBrevoConfigured } from "@/lib/email/brevo";
 import {
-  hasEnvGmailSend,
-  sendViaEnvGmail,
-} from "@/lib/email/gmail-env";
+  hasGoogleMailTokens,
+  sendViaGmailOAuth,
+  type GoogleMailTokens,
+} from "@/lib/email/gmail-oauth";
+import {
+  isGmailServiceConfigured,
+  sendViaGmailService,
+} from "@/lib/email/gmail-service";
 import { isResendConfigured, sendViaResendFallback } from "@/lib/email/resend-fallback";
 import { isSmtpConfigured, sendMail } from "@/lib/email/smtp";
 import {
@@ -32,7 +38,7 @@ export interface QuizEmailResult {
   error?: string;
 }
 
-type MailDelivery = (opts: {
+type MailSender = (opts: {
   to: string;
   subject: string;
   html: string;
@@ -61,27 +67,14 @@ function partnerContent(payload: QuizEmailPayload) {
   });
 
   return {
-    subject: `${payload.userName} completed LoveQuest for you ❤️`,
     html,
     text,
+    subject: `${payload.userName} completed LoveQuest for you ❤️`,
   };
 }
 
-async function sendPartnerMessage(
-  payload: QuizEmailPayload,
-  delivery: MailDelivery,
-): Promise<void> {
-  const { subject, html, text } = partnerContent(payload);
-  await delivery({ to: payload.partnerEmail, subject, html, text });
-}
-
-async function sendUserMessage(
-  payload: QuizEmailPayload,
-  delivery: MailDelivery,
-): Promise<void> {
-  await delivery({
-    to: payload.userEmail,
-    subject: `Your LoveQuest results — ${payload.score}/100 ${payload.personalityEmoji}`,
+function userContent(payload: QuizEmailPayload) {
+  return {
     html: buildUserSummaryHtml({
       userName: payload.userName,
       partnerName: payload.partnerName,
@@ -102,33 +95,36 @@ async function sendUserMessage(
       characterComment: payload.characterComment,
       shareUrl: payload.shareUrl,
     }),
-  });
+    subject: `Your LoveQuest results — ${payload.score}/100 ${payload.personalityEmoji}`,
+  };
 }
 
-/** When partner send fails, email user the partner version to forward manually. */
-async function sendPartnerForwardToUser(
+async function sendPartnerMessage(
   payload: QuizEmailPayload,
-  delivery: MailDelivery,
+  send: MailSender,
 ): Promise<void> {
-  const { html, text } = partnerContent(payload);
-  await delivery({
-    to: payload.userEmail,
-    subject: `Forward to ${payload.partnerName}: LoveQuest results ❤️`,
-    html: `<p>We couldn't auto-send to <strong>${payload.partnerEmail}</strong>. Forward this email to them:</p>${html}`,
-    text: `Forward to ${payload.partnerName} (${payload.partnerEmail}):\n\n${text}`,
-  });
+  const { html, text, subject } = partnerContent(payload);
+  await send({ to: payload.partnerEmail, subject, html, text });
 }
 
-async function tryDelivery(
+async function sendUserMessage(
   payload: QuizEmailPayload,
-  delivery: MailDelivery,
+  send: MailSender,
+): Promise<void> {
+  const { html, text, subject } = userContent(payload);
+  await send({ to: payload.userEmail, subject, html, text });
+}
+
+async function trySendBoth(
+  payload: QuizEmailPayload,
+  send: MailSender,
 ): Promise<QuizEmailResult> {
   let partnerSent = false;
   let userSent = false;
   let lastError: string | undefined;
 
   try {
-    await sendPartnerMessage(payload, delivery);
+    await sendPartnerMessage(payload, send);
     partnerSent = true;
   } catch (err) {
     console.error("Partner email failed:", err);
@@ -138,49 +134,36 @@ async function tryDelivery(
 
   if (payload.userEmail) {
     try {
-      await sendUserMessage(payload, delivery);
+      await sendUserMessage(payload, send);
       userSent = true;
     } catch (err) {
       console.error("User email failed:", err);
     }
   }
 
-  if (!partnerSent && payload.userEmail) {
-    try {
-      await sendPartnerForwardToUser(payload, delivery);
-    } catch (err) {
-      console.error("Forward-to-user email failed:", err);
-    }
-  }
-
-  if (partnerSent) {
-    return { sent: true, partnerSent: true, userSent };
-  }
-
-  return {
-    sent: false,
-    partnerSent: false,
-    userSent,
-    error:
-      lastError ??
-      `Could not email ${payload.partnerEmail}. Use the share link below.`,
-  };
+  return { sent: partnerSent, partnerSent, userSent, error: lastError };
 }
 
 /**
  * Sends results to partner + player.
- * Priority: Gmail env token → SMTP → Resend (limited in test mode).
+ * Priority: SMTP → Gmail service token → Brevo → session Gmail → Resend.
  */
 export async function sendQuizResultEmails(
   payload: QuizEmailPayload,
+  googleTokens?: GoogleMailTokens,
 ): Promise<QuizEmailResult> {
-  if (hasEnvGmailSend()) {
-    const result = await tryDelivery(payload, sendViaEnvGmail);
-    if (result.partnerSent) return result;
+  const senders: MailSender[] = [];
+
+  if (isSmtpConfigured()) senders.push(sendMail);
+  if (isGmailServiceConfigured()) senders.push(sendViaGmailService);
+  if (isBrevoConfigured()) senders.push(sendViaBrevo);
+
+  if (hasGoogleMailTokens(googleTokens)) {
+    senders.push((opts) => sendViaGmailOAuth(googleTokens!, opts));
   }
 
-  if (isSmtpConfigured()) {
-    const result = await tryDelivery(payload, sendMail);
+  for (const send of senders) {
+    const result = await trySendBoth(payload, send);
     if (result.partnerSent) return result;
   }
 
@@ -199,6 +182,6 @@ export async function sendQuizResultEmails(
     partnerSent: false,
     userSent: false,
     error:
-      "Email not configured. Run: npm run gmail:send-setup (then add token to Vercel).",
+      "Partner email is not configured yet. Run: npm run email:setup -- your@gmail.com your-app-password",
   };
 }

@@ -1,44 +1,10 @@
 import { google } from "googleapis";
+import { buildGmailRawMessage } from "@/lib/email/gmail-raw";
 
 export interface GoogleMailTokens {
   accessToken?: string;
   refreshToken?: string;
   expiresAt?: number;
-}
-
-function buildRawMessage(
-  from: string,
-  to: string,
-  subject: string,
-  html: string,
-  text: string,
-): string {
-  const boundary = "lovequest_boundary";
-  const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
-
-  const body = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${utf8Subject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    text,
-    `--${boundary}`,
-    "Content-Type: text/html; charset=utf-8",
-    "",
-    html,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  return Buffer.from(body)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
 
 function getOAuthClient(tokens: GoogleMailTokens) {
@@ -83,7 +49,7 @@ export async function sendViaGmailOAuth(
   await gmail.users.messages.send({
     userId: "me",
     requestBody: {
-      raw: buildRawMessage(
+      raw: buildGmailRawMessage(
         from,
         options.to,
         options.subject,

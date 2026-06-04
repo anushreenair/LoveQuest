@@ -42,17 +42,7 @@ export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
-/**
- * Resend test mode only delivers to the Resend account owner email.
- * Partner emails need Gmail setup: npm run gmail:send-setup
- */
-export async function sendViaResendFallback(
-  payload: QuizEmailPayload,
-): Promise<{
-  partnerSent: boolean;
-  userSent: boolean;
-  error?: string;
-}> {
+function buildPartnerRelayEmail(payload: QuizEmailPayload) {
   const partnerHtml = buildLQResultEmailHtml({
     userName: payload.userName,
     partnerName: payload.partnerName,
@@ -73,12 +63,63 @@ export async function sendViaResendFallback(
     shareUrl: payload.shareUrl,
   });
 
+  const relayHtml = `<!DOCTYPE html><html><body style="font-family:Georgia,serif;background:#1a0a2e;color:#fce7f3;padding:24px;">
+<p>Hi ${payload.userName},</p>
+<p>We couldn't deliver directly to <strong>${payload.partnerEmail}</strong> (Resend test mode).</p>
+<p><strong>Please forward the email below to ${payload.partnerName}.</strong></p>
+<p>Or send them this link: ${payload.shareUrl ?? ""}</p>
+<hr style="border:1px solid rgba(255,255,255,0.2);margin:24px 0"/>
+${partnerHtml}
+</body></html>`;
+
+  const relayText = `Hi ${payload.userName},
+
+Please forward this to ${payload.partnerName} (${payload.partnerEmail}).
+
+${partnerText}`;
+
+  return { relayHtml, relayText, partnerHtml, partnerText };
+}
+
+/** Resend test mode only delivers to the account owner email. */
+export async function sendViaResendFallback(
+  payload: QuizEmailPayload,
+): Promise<{
+  partnerSent: boolean;
+  userSent: boolean;
+  error?: string;
+}> {
+  const { relayHtml, relayText, partnerHtml, partnerText } =
+    buildPartnerRelayEmail(payload);
+
+  let partnerSent = false;
+  let userSent = false;
+
   const partnerResult = await resendSend(
     payload.partnerEmail,
     `${payload.userName} completed LoveQuest for you ❤️`,
     partnerHtml,
     partnerText,
   );
+  partnerSent = partnerResult.ok;
+
+  if (!partnerSent && payload.userEmail) {
+    const relayResult = await resendSend(
+      payload.userEmail,
+      `Forward to ${payload.partnerName}: LoveQuest results ❤️`,
+      relayHtml,
+      relayText,
+    );
+
+    if (relayResult.ok) {
+      userSent = true;
+      return {
+        partnerSent: false,
+        userSent: true,
+        error: `Resend can't email ${payload.partnerEmail} directly. We sent you a forwardable copy — please forward it, or use the share link below.`,
+      };
+    }
+  }
 
   const userResult = await resendSend(
     payload.userEmail,
@@ -104,24 +145,13 @@ export async function sendViaResendFallback(
       shareUrl: payload.shareUrl,
     }),
   );
-
-  const partnerSent = partnerResult.ok;
-  const userSent = userResult.ok;
-
-  if (!partnerSent && userSent && payload.userEmail) {
-    await resendSend(
-      payload.userEmail,
-      `Forward to ${payload.partnerName}: LoveQuest results ❤️`,
-      `<p>Resend can't auto-email ${payload.partnerEmail}. Forward this to your partner:</p>${partnerHtml}`,
-      `Forward to ${payload.partnerName}:\n\n${partnerText}`,
-    );
-  }
+  userSent = userResult.ok;
 
   return {
     partnerSent,
     userSent,
     error: partnerSent
       ? undefined
-      : `Resend can't email ${payload.partnerEmail} (test mode). Run npm run gmail:send-setup — or forward the email we sent you.`,
+      : `Could not email ${payload.partnerEmail}. Run: npm run email:setup -- your@gmail.com your-app-password`,
   };
 }
