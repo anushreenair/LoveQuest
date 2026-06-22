@@ -84,25 +84,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             image: googleProfile.picture,
           });
         } catch (error) {
-          // Google already approved the user — don't show "blocked" for a DB hiccup
           console.error("Google sign-in user sync failed:", error);
         }
       }
       return true;
     },
     async jwt({ token, user, account, profile }) {
-      if (account?.provider === "google" && profile?.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: profile.email.toLowerCase().trim() },
-        });
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.email = dbUser.email;
-          token.name = dbUser.name;
-          token.picture = dbUser.image;
+      try {
+        if (account?.provider === "google" && profile?.email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: profile.email.toLowerCase().trim() },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.email = dbUser.email;
+            token.name = dbUser.name;
+            token.picture = dbUser.image;
+          }
+        } else if (user?.id) {
+          token.id = user.id;
         }
-      } else if (user?.id) {
-        token.id = user.id;
+      } catch (error) {
+        console.error("JWT callback failed:", error);
       }
       return token;
     },

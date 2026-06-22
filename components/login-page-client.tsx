@@ -3,16 +3,13 @@
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Suspense, useState, useTransition, useEffect, useRef } from "react";
+import { Suspense, useState, useTransition } from "react";
 import Link from "next/link";
 import { GlassCard } from "@/components/glass-card";
 import { Button } from "@/components/button";
 import { Input } from "@/components/input";
 import { PageTransition } from "@/components/page-transition";
-import {
-  getProductionGoogleLoginUrl,
-  shouldUseProductionGoogleOAuth,
-} from "@/lib/google-sign-in";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 const AUTH_ERRORS: Record<string, string> = {
   CredentialsSignin: "Invalid email or password. Please try again.",
@@ -22,7 +19,8 @@ const AUTH_ERRORS: Record<string, string> = {
     "This email is already registered with a password. Sign in with email instead.",
   AccessDenied:
     "Google blocked sign-in. Add your Gmail as a test user in Google OAuth consent screen, or use email + password.",
-  Configuration: "Google sign-in failed. Please try again.",
+  Configuration:
+    "Google sign-in session expired. Clear cookies for lovequest-omega.vercel.app and try again.",
   Default: "Sign-in failed. Please try again.",
 };
 
@@ -42,20 +40,10 @@ function LoginForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
-  const autoGoogleStarted = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const errorCode = searchParams.get("error");
-  const autoGoogle = searchParams.get("autoGoogle") === "1";
-
-  useEffect(() => {
-    if (!autoGoogle || !googleEnabled || autoGoogleStarted.current) return;
-    autoGoogleStarted.current = true;
-    setIsGoogleRedirecting(true);
-    signIn("google", { callbackUrl: "/quest" });
-  }, [autoGoogle, googleEnabled]);
   const urlError = errorCode
     ? AUTH_ERRORS[errorCode] ?? AUTH_ERRORS.Default
     : null;
@@ -81,15 +69,6 @@ function LoginForm({
       router.push("/quest");
       router.refresh();
     });
-  };
-
-  const handleGoogleSignIn = () => {
-    if (shouldUseProductionGoogleOAuth(window.location.hostname)) {
-      window.location.href = getProductionGoogleLoginUrl();
-      return;
-    }
-    setIsGoogleRedirecting(true);
-    signIn("google", { callbackUrl: "/quest" });
   };
 
   return (
@@ -212,31 +191,7 @@ function LoginForm({
                 <span className="text-xs text-white/40">or</span>
                 <div className="h-px flex-1 bg-white/10" />
               </div>
-
-              {isGoogleRedirecting ? (
-                <div className="flex flex-col items-center gap-3 py-4 text-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                    className="h-8 w-8 rounded-full border-2 border-pink-500/30 border-t-pink-500"
-                  />
-                  <p className="text-sm text-white/50">Redirecting to Google…</p>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="w-full"
-                  onClick={handleGoogleSignIn}
-                >
-                  Continue with Google
-                </Button>
-              )}
+              <GoogleSignInButton />
             </>
           )}
 

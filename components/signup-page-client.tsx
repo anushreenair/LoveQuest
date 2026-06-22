@@ -11,10 +11,7 @@ import { Input } from "@/components/input";
 import { PageTransition } from "@/components/page-transition";
 import { registerUser } from "@/actions/auth";
 import { APP_NAME } from "@/lib/brand";
-import {
-  getProductionGoogleLoginUrl,
-  shouldUseProductionGoogleOAuth,
-} from "@/lib/google-sign-in";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 interface SignUpPageClientProps {
   googleEnabled: boolean;
@@ -23,7 +20,6 @@ interface SignUpPageClientProps {
 export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -63,15 +59,6 @@ export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
       router.push("/quest");
       router.refresh();
     });
-  };
-
-  const handleGoogleSignIn = () => {
-    if (shouldUseProductionGoogleOAuth(window.location.hostname)) {
-      window.location.href = getProductionGoogleLoginUrl();
-      return;
-    }
-    setIsGoogleRedirecting(true);
-    signIn("google", { callbackUrl: "/quest" });
   };
 
   return (
@@ -161,31 +148,7 @@ export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
                   <span className="text-xs text-white/40">or</span>
                   <div className="h-px flex-1 bg-white/10" />
                 </div>
-
-                {isGoogleRedirecting ? (
-                  <div className="flex flex-col items-center gap-3 py-4 text-center">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                      className="h-8 w-8 rounded-full border-2 border-pink-500/30 border-t-pink-500"
-                    />
-                    <p className="text-sm text-white/50">Redirecting to Google…</p>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="lg"
-                    className="w-full"
-                    onClick={handleGoogleSignIn}
-                  >
-                    Continue with Google
-                  </Button>
-                )}
+                <GoogleSignInButton />
               </>
             )}
 

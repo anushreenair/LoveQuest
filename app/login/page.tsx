@@ -3,11 +3,22 @@ import {
   getGoogleOAuthConfig,
   isGoogleAuthEnabled,
 } from "@/lib/env";
+import { signIn } from "@/lib/auth";
 import { LoginPageClient } from "@/components/login-page-client";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ autoGoogle?: string; error?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+
+  if (params.autoGoogle === "1" && !params.error && isGoogleAuthEnabled()) {
+    await signIn("google", { redirectTo: "/quest" });
+  }
+
   const google = getGoogleOAuthConfig();
 
   return (

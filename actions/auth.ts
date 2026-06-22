@@ -1,8 +1,23 @@
 "use server";
 
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { signIn } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { signUpSchema } from "@/lib/validations";
+import {
+  getProductionGoogleLoginUrl,
+  shouldUseProductionGoogleOAuth,
+} from "@/lib/google-sign-in";
+
+export async function signInWithGoogle() {
+  const host = (await headers()).get("host")?.split(":")[0] ?? "";
+  if (shouldUseProductionGoogleOAuth(host)) {
+    redirect(getProductionGoogleLoginUrl());
+  }
+  await signIn("google", { redirectTo: "/quest" });
+}
 
 export type AuthActionResult =
   | { success: true }
