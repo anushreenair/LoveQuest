@@ -2,8 +2,11 @@ import Link from "next/link";
 import { APP_NAME } from "@/lib/brand";
 import { getGoogleOAuthConfig, getGoogleOAuthRedirectUri } from "@/lib/env";
 
-const REDIRECT_URI = "https://lovequest-omega.vercel.app/api/auth/callback/google";
-const JS_ORIGIN = "https://lovequest-omega.vercel.app";
+const PRODUCTION_REDIRECT_URI =
+  "https://lovequest-omega.vercel.app/api/auth/callback/google";
+const LOCAL_REDIRECT_URI = "http://localhost:3000/api/auth/callback/google";
+const PRODUCTION_JS_ORIGIN = "https://lovequest-omega.vercel.app";
+const LOCAL_JS_ORIGIN = "http://localhost:3000";
 const CONSENT_URL =
   "https://console.cloud.google.com/auth/audience?project=791568444572";
 
@@ -28,15 +31,19 @@ export default function GoogleSetupPage() {
           </a>
         </li>
         <li>
-          Under <strong>Authorized redirect URIs</strong>, click <strong>+ Add URI</strong> and paste:
+          Under <strong>Authorized redirect URIs</strong>, add both:
           <pre className="mt-2 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-pink-200">
-            {REDIRECT_URI}
+            {PRODUCTION_REDIRECT_URI}
+            {"\n"}
+            {LOCAL_REDIRECT_URI}
           </pre>
         </li>
         <li>
-          Under <strong>Authorized JavaScript origins</strong>, add:
+          Under <strong>Authorized JavaScript origins</strong>, add both:
           <pre className="mt-2 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-pink-200">
-            {JS_ORIGIN}
+            {PRODUCTION_JS_ORIGIN}
+            {"\n"}
+            {LOCAL_JS_ORIGIN}
           </pre>
         </li>
         <li>

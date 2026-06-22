@@ -3,30 +3,31 @@
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Suspense, useState, useTransition, useEffect } from "react";
+import { Suspense, useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import { GlassCard } from "@/components/glass-card";
 import { Button } from "@/components/button";
 import { Input } from "@/components/input";
 import { PageTransition } from "@/components/page-transition";
+import {
+  getProductionGoogleLoginUrl,
+  shouldUseProductionGoogleOAuth,
+} from "@/lib/google-sign-in";
 
 const AUTH_ERRORS: Record<string, string> = {
   CredentialsSignin: "Invalid email or password. Please try again.",
   OAuthSignin: "Could not start Google sign-in. Please try again.",
-  OAuthCallback:
-    "Google sign-in was interrupted. Please try again (don't use a private window).",
+  OAuthCallback: "Google sign-in was interrupted. Please try again.",
   OAuthAccountNotLinked:
     "This email is already registered with a password. Sign in with email instead.",
   AccessDenied:
-    "Google blocked sign-in. If the app is in Testing mode, add your Gmail under OAuth consent screen → Test users.",
-  Configuration:
-    "Google sign-in failed. Clear cookies for this site and try again.",
+    "Google blocked sign-in. Add your Gmail as a test user in Google OAuth consent screen, or use email + password.",
+  Configuration: "Google sign-in failed. Please try again.",
   Default: "Sign-in failed. Please try again.",
 };
 
 interface LoginFormProps {
   googleEnabled: boolean;
-  googleSetupPending?: boolean;
   googleRedirectUri?: string;
   googleClientId?: string;
   googleConsoleUrl?: string;
@@ -34,7 +35,6 @@ interface LoginFormProps {
 
 function LoginForm({
   googleEnabled,
-  googleSetupPending,
   googleRedirectUri,
   googleClientId,
   googleConsoleUrl,
@@ -43,24 +43,19 @@ function LoginForm({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
+  const autoGoogleStarted = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [showGoogle, setShowGoogle] = useState(googleEnabled);
-  const [setupPending, setSetupPending] = useState(!!googleSetupPending);
+  const errorCode = searchParams.get("error");
+  const autoGoogle = searchParams.get("autoGoogle") === "1";
 
   useEffect(() => {
-    fetch("/api/auth/oauth-health", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data: { ready?: boolean; clientId?: string }) => {
-        const ready = !!data.ready;
-        setShowGoogle(ready);
-        setSetupPending(!ready && !!data.clientId);
-      })
-      .catch(() => {});
-  }, []);
-
-  const errorCode = searchParams.get("error");
+    if (!autoGoogle || !googleEnabled || autoGoogleStarted.current) return;
+    autoGoogleStarted.current = true;
+    setIsGoogleRedirecting(true);
+    signIn("google", { callbackUrl: "/quest" });
+  }, [autoGoogle, googleEnabled]);
   const urlError = errorCode
     ? AUTH_ERRORS[errorCode] ?? AUTH_ERRORS.Default
     : null;
@@ -89,6 +84,10 @@ function LoginForm({
   };
 
   const handleGoogleSignIn = () => {
+    if (shouldUseProductionGoogleOAuth(window.location.hostname)) {
+      window.location.href = getProductionGoogleLoginUrl();
+      return;
+    }
     setIsGoogleRedirecting(true);
     signIn("google", { callbackUrl: "/quest" });
   };
@@ -109,23 +108,13 @@ function LoginForm({
               Welcome back
             </h1>
             <p className="mt-2 text-white/50">
-              Sign in with your email and password
+              Sign in with Google or your email
             </p>
           </div>
 
           {registered && (
             <div className="mb-6 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
               Account created! Sign in with your new password.
-            </div>
-          )}
-
-          {setupPending && (
-            <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              Google sign-in needs a one-time setup in Google Cloud.{" "}
-              <Link href="/setup/google" className="font-medium underline">
-                Fix it here (2 min)
-              </Link>
-              {" — or use email + password below."}
             </div>
           )}
 
@@ -156,10 +145,15 @@ function LoginForm({
                   </p>
                 </div>
               )}
-              {googleEnabled && googleRedirectUri && errorCode?.startsWith("OAuth") && (
+              {googleEnabled &&
+                googleRedirectUri &&
+                (errorCode?.startsWith("OAuth") || errorCode === "Configuration") && (
                 <div className="mt-3 space-y-2 text-xs text-red-200/90">
                   <p>
-                    In{" "}
+                    <Link href="/setup/google" className="underline">
+                      Google setup guide
+                    </Link>
+                    {" · "}
                     {googleConsoleUrl ? (
                       <a
                         href={googleConsoleUrl}
@@ -167,21 +161,15 @@ function LoginForm({
                         rel="noreferrer"
                         className="underline"
                       >
-                        Google Cloud Console
+                        Open Console
                       </a>
                     ) : (
                       "Google Cloud Console"
                     )}
-                    , add this <strong>exact</strong> redirect URI:
                   </p>
                   <p className="break-all rounded bg-black/30 p-2 font-mono text-[11px]">
                     {googleRedirectUri}
                   </p>
-                  {googleClientId && (
-                    <p className="break-all opacity-80">
-                      OAuth client: {googleClientId}
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -217,7 +205,7 @@ function LoginForm({
             </Button>
           </form>
 
-          {showGoogle && (
+          {googleEnabled && (
             <>
               <div className="my-6 flex items-center gap-3">
                 <div className="h-px flex-1 bg-white/10" />
@@ -269,7 +257,6 @@ function LoginForm({
 
 export function LoginPageClient({
   googleEnabled,
-  googleSetupPending,
   googleRedirectUri,
   googleClientId,
   googleConsoleUrl,
@@ -279,7 +266,6 @@ export function LoginPageClient({
       <Suspense>
         <LoginForm
           googleEnabled={googleEnabled}
-          googleSetupPending={googleSetupPending}
           googleRedirectUri={googleRedirectUri}
           googleClientId={googleClientId}
           googleConsoleUrl={googleConsoleUrl}

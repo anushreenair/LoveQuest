@@ -43,35 +43,61 @@ export function isGoogleAuthEnabled() {
   return getGoogleOAuthConfig() !== null;
 }
 
-const PRODUCTION_HOST = "lovequest-omega.vercel.app";
+export const PRODUCTION_HOST = "lovequest-omega.vercel.app";
+const LOCAL_OAUTH_ORIGIN = "http://localhost:3000";
 
-/** Stable public URL — never use per-deployment VERCEL_URL for OAuth. */
-export function getAuthBaseUrl() {
-  const productionHost = cleanEnv(process.env.VERCEL_PROJECT_PRODUCTION_URL);
-
-  if (process.env.VERCEL === "1") {
-    const host = (productionHost ?? PRODUCTION_HOST).replace(/^https?:\/\//, "");
-    return `https://${host.replace(/\/$/, "")}`;
-  }
-
+function isPrivateLanHost(host: string): boolean {
   return (
-    cleanEnv(process.env.AUTH_URL) ??
-    cleanEnv(process.env.NEXTAUTH_URL) ??
-    cleanEnv(process.env.APP_PUBLIC_URL) ??
-    cleanEnv(process.env.NEXT_PUBLIC_APP_URL) ??
-    undefined
+    host.startsWith("192.168.") ||
+    host.startsWith("10.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
   );
 }
 
-export function getGoogleOAuthRedirectUri() {
-  const base = getAuthBaseUrl() ?? "http://localhost:3000";
-  return `${base.replace(/\/$/, "")}/api/auth/callback/google`;
+/** OAuth callback origin — Google only allows localhost in dev, never LAN IPs. */
+export function getOAuthBaseUrl(): string {
+  if (process.env.VERCEL === "1") {
+    const host = (
+      cleanEnv(process.env.VERCEL_PROJECT_PRODUCTION_URL) ?? PRODUCTION_HOST
+    ).replace(/^https?:\/\//, "");
+    return `https://${host.replace(/\/$/, "")}`;
+  }
+
+  const fromEnv =
+    cleanEnv(process.env.AUTH_URL) ??
+    cleanEnv(process.env.NEXTAUTH_URL) ??
+    cleanEnv(process.env.APP_PUBLIC_URL);
+
+  if (fromEnv) {
+    try {
+      const { hostname, port, protocol } = new URL(fromEnv);
+      if (!isPrivateLanHost(hostname) && hostname !== "0.0.0.0") {
+        return fromEnv.replace(/\/$/, "");
+      }
+    } catch {
+      // fall through to localhost
+    }
+  }
+
+  return LOCAL_OAUTH_ORIGIN;
 }
 
-/** Pin OAuth to the stable production domain on Vercel. */
+/** Stable public URL for OAuth — never use per-deployment VERCEL_URL or LAN IPs. */
+export function getAuthBaseUrl() {
+  return getOAuthBaseUrl();
+}
+
+export function getGoogleOAuthRedirectUri() {
+  return `${getOAuthBaseUrl().replace(/\/$/, "")}/api/auth/callback/google`;
+}
+
+/** Pin OAuth to localhost in dev and stable production domain on Vercel. */
 export function ensureAuthUrl() {
-  const base = getAuthBaseUrl();
-  if (base) {
-    process.env.AUTH_URL = base;
-  }
+  const base = getOAuthBaseUrl();
+  process.env.AUTH_URL = base;
+  process.env.NEXTAUTH_URL = base;
+}
+
+export function isPrivateLanAccess(hostname: string): boolean {
+  return isPrivateLanHost(hostname);
 }

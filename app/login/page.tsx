@@ -1,20 +1,18 @@
 import {
   getGoogleOAuthRedirectUri,
   getGoogleOAuthConfig,
+  isGoogleAuthEnabled,
 } from "@/lib/env";
-import { isGoogleAuthReady } from "@/lib/google-oauth-health";
 import { LoginPageClient } from "@/components/login-page-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default function LoginPage() {
   const google = getGoogleOAuthConfig();
-  const googleReady = await isGoogleAuthReady();
 
   return (
     <LoginPageClient
-      googleEnabled={googleReady}
-      googleSetupPending={!!google && !googleReady}
+      googleEnabled={isGoogleAuthEnabled()}
       googleRedirectUri={getGoogleOAuthRedirectUri()}
       googleClientId={google?.clientId}
       googleConsoleUrl={

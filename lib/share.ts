@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import os from "os";
 import { buildShareUrl } from "@/lib/share-links";
-import { getAuthBaseUrl } from "@/lib/env";
+import { getOAuthBaseUrl } from "@/lib/env";
 
 export { buildShareUrl, buildMailtoLink, buildWhatsAppLink } from "@/lib/share-links";
 
@@ -26,9 +26,8 @@ function getLanIp() {
 }
 
 export async function getAppBaseUrl() {
-  const vercelBase = getAuthBaseUrl();
-  if (vercelBase) {
-    return vercelBase.replace(/\/$/, "");
+  if (process.env.VERCEL === "1") {
+    return getOAuthBaseUrl().replace(/\/$/, "");
   }
 
   const publicUrl =

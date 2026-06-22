@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { GlassCard } from "@/components/glass-card";
@@ -11,6 +11,10 @@ import { Input } from "@/components/input";
 import { PageTransition } from "@/components/page-transition";
 import { registerUser } from "@/actions/auth";
 import { APP_NAME } from "@/lib/brand";
+import {
+  getProductionGoogleLoginUrl,
+  shouldUseProductionGoogleOAuth,
+} from "@/lib/google-sign-in";
 
 interface SignUpPageClientProps {
   googleEnabled: boolean;
@@ -18,7 +22,6 @@ interface SignUpPageClientProps {
 
 export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
   const router = useRouter();
-  const [showGoogle, setShowGoogle] = useState(googleEnabled);
   const [isPending, startTransition] = useTransition();
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +29,6 @@ export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  useEffect(() => {
-    fetch("/api/auth/oauth-health", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data: { ready?: boolean }) => setShowGoogle(!!data.ready))
-      .catch(() => {});
-  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +66,10 @@ export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
   };
 
   const handleGoogleSignIn = () => {
+    if (shouldUseProductionGoogleOAuth(window.location.hostname)) {
+      window.location.href = getProductionGoogleLoginUrl();
+      return;
+    }
     setIsGoogleRedirecting(true);
     signIn("google", { callbackUrl: "/quest" });
   };
@@ -154,7 +154,7 @@ export function SignUpPageClient({ googleEnabled }: SignUpPageClientProps) {
               </Button>
             </form>
 
-            {showGoogle && (
+            {googleEnabled && (
               <>
                 <div className="my-6 flex items-center gap-3">
                   <div className="h-px flex-1 bg-white/10" />
