@@ -20,7 +20,7 @@ const AUTH_ERRORS: Record<string, string> = {
   AccessDenied:
     "Google blocked sign-in. Add your Gmail as a test user in Google OAuth consent screen, or use email + password.",
   Configuration:
-    "Google sign-in session expired. Clear cookies for lovequest-omega.vercel.app and try again.",
+    "Google sign-in could not finish. Clear cookies for this site, then try again in Chrome or Safari (not a private window).",
   Default: "Sign-in failed. Please try again.",
 };
 

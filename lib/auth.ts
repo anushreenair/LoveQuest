@@ -51,6 +51,8 @@ if (googleConfig) {
     Google({
       clientId: googleConfig.clientId,
       clientSecret: googleConfig.clientSecret,
+      // State-only avoids PKCE cookie issues that surface as Configuration errors.
+      checks: ["state"],
       authorization: {
         params: {
           prompt: "select_account",
@@ -64,6 +66,7 @@ if (googleConfig) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
+  debug: process.env.AUTH_DEBUG === "1",
   providers,
   pages: {
     signIn: "/login",
