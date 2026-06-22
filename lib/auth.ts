@@ -66,6 +66,7 @@ if (googleConfig) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
+  useSecureCookies: process.env.VERCEL === "1",
   debug: process.env.AUTH_DEBUG === "1",
   providers,
   pages: {
